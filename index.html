@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Blockly App</title>
+  <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+  <script src="https://unpkg.com/blockly/javascript"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="container">
+    <!-- Header Banner -->
+    <header id="header">
+      <div id="headerContent">
+        <div id="logoSection">
+          <img id="logo" src="CEEOlogo.png" alt="Organization Logo">
+          <h1 id="pageTitle">Tech Element Playground</h1>
+        </div>
+        <div id="headerRight">
+          <!-- You can add additional header items here like user info, settings, etc -->
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div id="mainArea">
+      <div id="blocklyDiv"></div>
+      <div id="outputArea">
+        <h3>Output</h3>
+        <div id="output">Click "Run Code" to see output here...</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer id="footer">
+      <p id="disclaimer">
+        © 2024 Your Organization. This platform is provided for educational purposes. 
+        Use at your own discretion. All code executed runs in your browser.
+      </p>
+    </footer>
+
+    <!-- Floating Action Buttons -->
+    <div id="floatingButtons">
+      <button id="bleButton" title="Connect Bluetooth">
+        <svg width="24" height="24" viewBox="0 0 24 24">
+          <path d="M17.71,7.71L12,2H11V9.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71M13,5.83L15.17,8L13,10.17V5.83M13,13.83L15.17,16L13,18.17V13.83Z" fill="white"/>
+        </svg>
+      </button>
+      <button id="runButton" title="Run Code">
+        <svg width="24" height="24" viewBox="0 0 24 24">
+          <polygon points="8,5 19,12 8,19" fill="white"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <script src="ble.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
