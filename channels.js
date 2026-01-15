@@ -1,12 +1,13 @@
-// channels.js - WebSocket Channel Communication
+// channels.js - WebSocket Channel Communication (Simplified)
 
 class ChannelManager {
   constructor() {
     this.connection = null;
-    this.channelName = "hackathon"; // Fixed channel name
+    this.channelName = "hackathon";
     this.url = "wss://chrisrogers.pyscriptapps.com/talking-on-a-channel/api/channels/hackathon";
     this.onMessageReceived = null;
-    this.messageQueue = []; // Queue messages while connecting
+    this.messageQueue = []; // Queue for outgoing messages while connecting
+    this.receivedValues = []; // Queue for incoming values
     this.isConnected = false;
   }
 
@@ -40,23 +41,37 @@ class ChannelManager {
 
       ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data);
-          console.log(`📥 Received:`, data);
+          const message = JSON.parse(event.data);
+          console.log(`📥 Received full message:`, message);
           
-          if (window.outputDiv) {
-            window.outputDiv.textContent += `📥 Channel: topic="${data.topic}" value=${JSON.stringify(data.value)}\n`;
+          // Handle different message types
+          if (message.type === 'welcome') {
+            console.log('✅ Welcome message received');
+            if (window.outputDiv) {
+              window.outputDiv.textContent += `✅ Channel ready\n`;
+            }
+            return;
           }
           
-          // Store messages
-          if (!window.channelMessages) window.channelMessages = [];
-          window.channelMessages.push(data);
-          
-          // Call callback if set
-          if (this.onMessageReceived) {
-            this.onMessageReceived(data);
+          if (message.type === 'data' && message.payload) {
+            // Parse the payload which is a JSON string
+            const data = JSON.parse(message.payload);
+            console.log(`📥 Parsed data:`, data);
+            
+            // Store just the value
+            this.receivedValues.push(data.value);
+            
+            if (window.outputDiv) {
+              window.outputDiv.textContent += `📥 Channel received: ${JSON.stringify(data.value)}\n`;
+            }
+            
+            // Call callback if set
+            if (this.onMessageReceived) {
+              this.onMessageReceived(data.value);
+            }
           }
         } catch (e) {
-          console.error('Error parsing message:', e);
+          console.error('Error parsing message:', e, event.data);
         }
       };
 
@@ -89,8 +104,8 @@ class ChannelManager {
     }
   }
 
-  // Send message to the channel
-  sendMessage(topic, value) {
+  // Send message to the channel and wait for confirmation
+  async sendMessage(topic, value) {
     const message = {
       topic: topic,
       value: value
@@ -99,40 +114,96 @@ class ChannelManager {
     // Connect if not already connected
     if (!this.connection) {
       this.connect();
+      // Wait for connection to open
+      await this.waitForConnection();
     }
     
     // If connecting, queue the message
     if (this.connection && this.connection.readyState === WebSocket.CONNECTING) {
-      this.messageQueue.push(message);
-      console.log(`Queued message:`, message);
-    } 
-    // If open, send immediately
-    else if (this.connection && this.connection.readyState === WebSocket.OPEN) {
+      await this.waitForConnection();
+    }
+    
+    // Send the message
+    if (this.connection && this.connection.readyState === WebSocket.OPEN) {
       this.connection.send(JSON.stringify(message));
       console.log(`📤 Sent:`, message);
       
       if (window.outputDiv) {
         window.outputDiv.textContent += `📤 Sent: topic="${topic}" value=${JSON.stringify(value)}\n`;
       }
+      
+      // Small delay to ensure message is sent
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
-    // Otherwise reconnect and queue
+    // Otherwise reconnect and try again
     else {
       console.log(`Reconnecting...`);
       this.connection = null;
       this.isConnected = false;
-      this.messageQueue.push(message);
       this.connect();
+      await this.waitForConnection();
+      return this.sendMessage(topic, value);
     }
   }
 
-  // Read last message from channel
+  // Wait for connection to be established
+  async waitForConnection(timeoutMs = 5000) {
+    const startTime = Date.now();
+    
+    while (!this.isConnected || this.connection.readyState !== WebSocket.OPEN) {
+      if (Date.now() - startTime > timeoutMs) {
+        throw new Error('Timeout waiting for connection');
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  // Read last value from channel (returns the value directly, or null if no messages)
   readMessage() {
-    if (!window.channelMessages || window.channelMessages.length === 0) {
+    if (this.receivedValues.length === 0) {
       return null;
     }
     
-    // Get the first message (FIFO)
-    return window.channelMessages.shift();
+    // Get the first value (FIFO)
+    return this.receivedValues.shift();
+  }
+
+  // Check if there are any unread values
+  hasMessages() {
+    return this.receivedValues.length > 0;
+  }
+
+  // Get count of unread values
+  messageCount() {
+    return this.receivedValues.length;
+  }
+
+  // Peek at the next value without removing it
+  peekMessage() {
+    if (this.receivedValues.length === 0) {
+      return null;
+    }
+    return this.receivedValues[0];
+  }
+
+  // Clear all received values
+  clearMessages() {
+    this.receivedValues = [];
+  }
+
+  // Wait for a message to arrive (with timeout)
+  async waitForMessage(timeoutMs = 5000) {
+    const startTime = Date.now();
+    
+    while (this.receivedValues.length === 0) {
+      if (Date.now() - startTime > timeoutMs) {
+        throw new Error('Timeout waiting for message');
+      }
+      // Wait a bit before checking again
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    return this.readMessage();
   }
 
   // Disconnect from channel
@@ -147,3 +218,40 @@ class ChannelManager {
 
 // Create global instance
 window.channelManager = new ChannelManager();
+
+// Add Blockly block for waiting for message
+Blockly.Blocks['wait_for_channel_message'] = {
+  init: function() {
+    this.appendDummyInput()
+        .appendField("Wait for channel message");
+    this.setOutput(true, null);
+    this.setColour(340);
+    this.setTooltip("Wait for a message from the channel (blocks until message arrives)");
+  }
+};
+
+Blockly.JavaScript.forBlock['wait_for_channel_message'] = function(block, generator) {
+  var code = `(await window.channelManager.waitForMessage())`;
+  return [code, Blockly.JavaScript.ORDER_AWAIT];
+};
+
+// Delay/Wait block
+Blockly.Blocks['wait_seconds'] = {
+  init: function() {
+    this.appendValueInput("DURATION")
+        .setCheck("Number")
+        .appendField("Wait");
+    this.appendDummyInput()
+        .appendField("seconds");
+    this.setPreviousStatement(true, null);
+    this.setNextStatement(true, null);
+    this.setColour(340);
+    this.setTooltip("Pause execution for specified seconds");
+  }
+};
+
+Blockly.JavaScript.forBlock['wait_seconds'] = function(block, generator) {
+  var duration = generator.valueToCode(block, 'DURATION', Blockly.JavaScript.ORDER_ATOMIC) || '1';
+  var code = `await new Promise(resolve => setTimeout(resolve, ${duration} * 1000));\n`;
+  return code;
+};

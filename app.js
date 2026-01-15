@@ -1,4 +1,6 @@
 
+// Reference to output div
+let outputDiv = document.getElementById('output');
 
 
 // Define custom API call block
@@ -791,25 +793,33 @@ const toolbox = {
         }
       ]
     },
-    {
-      "kind": "category",
-      "name": "Channels",
-      "colour": "12",
-      "contents": [
-        {
-          "kind": "block",
-          "type": "connect_channel"
-        },
-        {
-          "kind": "block",
-          "type": "send_channel_message"
-        },
-        {
-          "kind": "block",
-          "type": "read_channel_message"
-        }
-      ]
+      {
+    "kind": "category",
+    "name": "Channels",
+    "colour": "340",
+    "contents": [
+      {
+        "kind": "block",
+        "type": "connect_channel"
+      },
+      {
+        "kind": "block",
+        "type": "send_channel_message"
+      },
+      {
+        "kind": "block",
+        "type": "read_channel_message"
+      },
+      {
+        "kind": "block",
+        "type": "wait_for_channel_message"
+      },
+      {
+        "kind": "block",
+        "type": "wait_seconds"
       }
+    ]
+  }
   ]
 };
 
