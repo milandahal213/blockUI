@@ -34,13 +34,18 @@
     <!-- Footer -->
     <footer id="footer">
       <p id="disclaimer">
-        © 2024 Your Organization. This platform is provided for educational purposes. 
+        © 2024 Milan Dahal. This platform is provided for educational purposes. 
         Use at your own discretion. All code executed runs in your browser.
       </p>
     </footer>
 
     <!-- Floating Action Buttons -->
     <div id="floatingButtons">
+      <button id="serialButton" title="Connect Serial">
+        <svg width="24" height="24" viewBox="0 0 24 24">
+          <path d="M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z" fill="white"/>
+        </svg>
+      </button>
       <button id="bleButton" title="Connect Bluetooth">
         <svg width="24" height="24" viewBox="0 0 24 24">
           <path d="M17.71,7.71L12,2H11V9.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L11,14.41V22H12L17.71,16.29L13.41,12L17.71,7.71M13,5.83L15.17,8L13,10.17V5.83M13,13.83L15.17,16L13,18.17V13.83Z" fill="white"/>
@@ -53,7 +58,13 @@
       </button>
     </div>
   </div>
+
+ 
   <script src="ble.js"></script>
+  <script src="serial.js"></script>
+  <script src="channels.js"></script>
   <script src="app.js"></script>
+
+
 </body>
 </html>

@@ -4,11 +4,17 @@ class BLEManager {
   constructor() {
     this.device = null;
     this.server = null;
+    this.service = null;
+    this.writeCharacteristic = null;
+    this.notifyCharacteristic = null;
     this.serviceUUID = null;
     this.txCharUUID = null;
     this.rxCharUUID = null;
     this.onDataReceived = null;
     this.onConnectionChange = null;
+    this.handleNotification = null;
+    this.hubInfo = null; // Will need to be set if using send() method
+    this.packetSize = 20; // Default BLE packet size
   }
 
   // Initialize with UUIDs
@@ -16,6 +22,16 @@ class BLEManager {
     this.serviceUUID = serviceUUID;
     this.txCharUUID = txCharUUID;
     this.rxCharUUID = rxCharUUID;
+  }
+
+  // Set hub info for message packing (if needed)
+  setHubInfo(hubInfo) {
+    this.hubInfo = hubInfo;
+  }
+
+  // Set packet size for chunked sending
+  setPacketSize(size) {
+    this.packetSize = size;
   }
 
   // Check if Web Bluetooth is available
@@ -29,36 +45,47 @@ class BLEManager {
   }
 
   // Connect to BLE device
-  async connect(filters = null) {
+  async connect(filters = null, callback = null) {
     try {
       if (!this.isAvailable()) {
         throw new Error('Web Bluetooth API is not available in this browser. Please use Chrome, Edge, or Opera.');
       }
 
-      // Default filters if none provided
-      const requestOptions = filters || {
-        filters: [{ services: [this.serviceUUID] }],
-        optionalServices: [this.serviceUUID]
-      };
+      // If device already exists (reconnecting), skip device selection
+      if (!this.device) {
+        // Default filters if none provided
+        const requestOptions = filters || {
+          filters: [{ services: [this.serviceUUID] }],
+          optionalServices: [this.serviceUUID, 'generic_access', 'device_information']
+        };
 
-      // Request device
-      this.device = await navigator.bluetooth.requestDevice(requestOptions);
+        // Request device
+        this.device = await navigator.bluetooth.requestDevice(requestOptions);
+      }
 
       // Connect to GATT server
       this.server = await this.device.gatt.connect();
+
+      // Get and cache service and characteristics (more efficient)
+      this.service = await this.server.getPrimaryService(this.serviceUUID);
+      this.writeCharacteristic = await this.service.getCharacteristic(this.txCharUUID);
+      this.notifyCharacteristic = await this.service.getCharacteristic(this.rxCharUUID);
 
       // Set up disconnect handler
       this.device.addEventListener('gattserverdisconnected', () => {
         this.onDisconnect();
       });
 
-      // Auto-start notifications if RX characteristic is defined
-      if (this.rxCharUUID) {
-        await this.startNotifications();
-      }
+      // Auto-start notifications
+      await this.startNotifications();
 
       if (this.onConnectionChange) {
         this.onConnectionChange(true, this.device);
+      }
+
+      // Call custom callback if provided
+      if (callback) {
+        callback(true, this.device);
       }
 
       return {
@@ -72,6 +99,11 @@ class BLEManager {
       if (this.onConnectionChange) {
         this.onConnectionChange(false, null, error);
       }
+      
+      if (callback) {
+        callback(false, null, error);
+      }
+      
       throw error;
     }
   }
@@ -82,6 +114,11 @@ class BLEManager {
       if (this.device && this.device.gatt.connected) {
         await this.device.gatt.disconnect();
       }
+      this.device = null;
+      this.server = null;
+      this.service = null;
+      this.writeCharacteristic = null;
+      this.notifyCharacteristic = null;
       return { success: true };
     } catch (error) {
       throw error;
@@ -95,22 +132,18 @@ class BLEManager {
     }
   }
 
-  // Write hex data to device
+  // Write hex data to device (optimized)
   async write(hexData) {
     try {
       if (!this.isConnected()) {
         throw new Error('Not connected to BLE device');
       }
 
-      // Get service and characteristic
-      const service = await this.server.getPrimaryService(this.serviceUUID);
-      const characteristic = await service.getCharacteristic(this.txCharUUID);
-
       // Convert hex to bytes
       const dataToSend = this.hexToBytes(hexData);
 
-      // Write data
-      await characteristic.writeValue(dataToSend);
+      // Use cached characteristic instead of fetching each time
+      await this.writeCharacteristic.writeValue(dataToSend);
 
       return {
         success: true,
@@ -122,19 +155,116 @@ class BLEManager {
     }
   }
 
-  // Read data once from device
+  // Advanced send method with struct packing and chunking
+  async send(fmt, ID, val = null) {
+    console.log('Format:', fmt, 'ID:', ID, 'Value:', val);
+    
+    let payload = [ID];
+    
+    if (val) {
+      payload.push(...Object.values(val.values));
+    }
+    
+    console.log('Payload values:', payload);
+    
+    // Pack the payload based on format
+    const packedData = this.structPack(fmt, ...payload);
+    
+    // Pack message with hub info if available
+    let message;
+    if (this.hubInfo && typeof this.hubInfo.pack === 'function') {
+      message = this.hubInfo.pack(packedData);
+    } else {
+      message = packedData;
+    }
+    
+    const packet_size = this.packetSize;
+    
+    // Send in chunks
+    for (let i = 0; i < message.length; i += packet_size) {
+      const packet = message.slice(i, i + packet_size);
+      console.log('Sending packet:', Array.from(packet));
+      
+      // Write packet
+      await this.writeCharacteristic.writeValue(packet);
+      
+      // Small delay between packets to avoid overwhelming the device
+      if (i + packet_size < message.length) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+    
+    return {
+      success: true,
+      sent: this.bytesToHex(message)
+    };
+  }
+
+  // Compact struct.pack equivalent
+  structPack(fmt, ...values) {
+    const littleEndian = fmt.startsWith('<');
+    const format = fmt.replace('<', '').replace('>', '');
+    
+    // Map format chars to sizes
+    const sizes = { 'b': 1, 'B': 1, 'h': 2, 'H': 2, 'i': 4, 'I': 4, 'f': 4, 'd': 8 };
+    const size = [...format].reduce((sum, c) => sum + (sizes[c] || 0), 0);
+    
+    const buffer = new ArrayBuffer(size);
+    const view = new DataView(buffer);
+    
+    let offset = 0;
+    [...format].forEach((char, i) => {
+      const value = values[i];
+      
+      switch(char) {
+        case 'b': view.setInt8(offset, value); offset += 1; break;
+        case 'B': view.setUint8(offset, value); offset += 1; break;
+        case 'h': view.setInt16(offset, value, littleEndian); offset += 2; break;
+        case 'H': view.setUint16(offset, value, littleEndian); offset += 2; break;
+        case 'i': view.setInt32(offset, value, littleEndian); offset += 4; break;
+        case 'I': view.setUint32(offset, value, littleEndian); offset += 4; break;
+        case 'f': view.setFloat32(offset, value, littleEndian); offset += 4; break;
+        case 'd': view.setFloat64(offset, value, littleEndian); offset += 8; break;
+      }
+    });
+    
+    return new Uint8Array(buffer);
+  }
+
+  // Struct unpack equivalent (for receiving data)
+  structUnpack(fmt, buffer) {
+    const littleEndian = fmt.startsWith('<');
+    const format = fmt.replace('<', '').replace('>', '');
+    
+    const view = new DataView(buffer.buffer || buffer);
+    const values = [];
+    
+    let offset = 0;
+    [...format].forEach((char) => {
+      switch(char) {
+        case 'b': values.push(view.getInt8(offset)); offset += 1; break;
+        case 'B': values.push(view.getUint8(offset)); offset += 1; break;
+        case 'h': values.push(view.getInt16(offset, littleEndian)); offset += 2; break;
+        case 'H': values.push(view.getUint16(offset, littleEndian)); offset += 2; break;
+        case 'i': values.push(view.getInt32(offset, littleEndian)); offset += 4; break;
+        case 'I': values.push(view.getUint32(offset, littleEndian)); offset += 4; break;
+        case 'f': values.push(view.getFloat32(offset, littleEndian)); offset += 4; break;
+        case 'd': values.push(view.getFloat64(offset, littleEndian)); offset += 8; break;
+      }
+    });
+    
+    return values;
+  }
+
+  // Read data once from device (optimized)
   async read() {
     try {
       if (!this.isConnected()) {
         throw new Error('Not connected to BLE device');
       }
 
-      // Get service and characteristic
-      const service = await this.server.getPrimaryService(this.serviceUUID);
-      const characteristic = await service.getCharacteristic(this.rxCharUUID);
-
-      // Read value
-      const value = await characteristic.readValue();
+      // Read value from cached characteristic
+      const value = await this.notifyCharacteristic.readValue();
       const byteArray = new Uint8Array(value.buffer);
       const hexString = this.bytesToHex(byteArray);
 
@@ -149,24 +279,20 @@ class BLEManager {
     }
   }
 
-  // Start continuous notifications
+  // Start continuous notifications (optimized)
   async startNotifications() {
     try {
       if (!this.isConnected()) {
         throw new Error('Not connected to BLE device');
       }
 
-      // Get service and characteristic
-      const service = await this.server.getPrimaryService(this.serviceUUID);
-      const characteristic = await service.getCharacteristic(this.rxCharUUID);
+      // Use cached characteristic
+      await this.notifyCharacteristic.startNotifications();
 
-      // Start notifications
-      await characteristic.startNotifications();
-
-      // Add event listener
-      characteristic.addEventListener('characteristicvaluechanged', (event) => {
-        this.handleNotification(event);
-      });
+      // Bind and add event listener
+      this.handleNotification = this.handleNotificationEvent.bind(this);
+      this.notifyCharacteristic.addEventListener('characteristicvaluechanged', 
+        this.handleNotification);
 
       return { success: true };
 
@@ -175,17 +301,19 @@ class BLEManager {
     }
   }
 
-  // Stop notifications
+  // Stop notifications (optimized)
   async stopNotifications() {
     try {
       if (!this.isConnected()) {
         throw new Error('Not connected to BLE device');
       }
 
-      const service = await this.server.getPrimaryService(this.serviceUUID);
-      const characteristic = await service.getCharacteristic(this.rxCharUUID);
-
-      await characteristic.stopNotifications();
+      await this.notifyCharacteristic.stopNotifications();
+      
+      if (this.handleNotification) {
+        this.notifyCharacteristic.removeEventListener('characteristicvaluechanged', 
+          this.handleNotification);
+      }
 
       return { success: true };
 
@@ -195,7 +323,7 @@ class BLEManager {
   }
 
   // Handle incoming notifications
-  handleNotification(event) {
+  handleNotificationEvent(event) {
     const value = event.target.value;
     const byteArray = new Uint8Array(value.buffer);
     const hexString = this.bytesToHex(byteArray);
