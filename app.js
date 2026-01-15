@@ -830,17 +830,6 @@ const toolbox = {
         }
       ]
     },
-    {
-      "kind": "category",
-      "name": "Bluetooth",
-      "colour": "210",
-      "contents": [
-        {
-          "kind": "block",
-          "type": "ble_send"
-        }
-      ]
-    },
 {
       "kind": "category",
       "name": "Serial",
