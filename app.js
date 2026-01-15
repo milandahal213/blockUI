@@ -1,25 +1,4 @@
 
-// Reference to output div
-let outputDiv = document.getElementById('output');
-
-// Set up callback for received data
-bleManager.onDataReceived = (hexString, byteArray) => {
-  outputDiv.textContent += `📥 Received: ${hexString}\n`;
-  console.log('Received bytes:', byteArray);
-};
-
-// Set up callback for connection changes
-bleManager.onConnectionChange = (connected, device, error) => {
-  if (connected) {
-    outputDiv.textContent += `✅ Connected to: ${device.name || 'Unknown'}\n`;
-    outputDiv.textContent += `📡 Continuous reading started\n\n`;
-  } else if (error) {
-    outputDiv.textContent += `❌ Connection error: ${error.message}\n`;
-  } else {
-    outputDiv.textContent += `⚠️ Disconnected\n`;
-  }
-};
-
 
 
 // Define custom API call block
