@@ -1,15 +1,4 @@
 
-
-// Initialize BLE Manager
-const bleManager = new BLEManager();
-
-// Configure your UUIDs here - UPDATE THESE WITH YOUR DEVICE'S UUIDs
-const SERVICE_UUID = '0000fd02-0000-1000-8000-00805f9b34fb';
-const TX_CHAR_UUID = '0000fd02-0001-1000-8000-00805f9b34fb';  // Write to device
-const RX_CHAR_UUID = '0000fd02-0002-1000-8000-00805f9b34fb';  // Read from device
-
-bleManager.setUUIDs(SERVICE_UUID, TX_CHAR_UUID, RX_CHAR_UUID);
-
 // Reference to output div
 let outputDiv = document.getElementById('output');
 
@@ -30,47 +19,6 @@ bleManager.onConnectionChange = (connected, device, error) => {
     outputDiv.textContent += `⚠️ Disconnected\n`;
   }
 };
-
-// BLE button handler
-document.getElementById('bleButton').addEventListener('click', async function() {
-  try {
-    outputDiv.textContent = '🔍 Scanning for Bluetooth devices...\n';
-    
-    // Option 1: Use configured service UUID (preferred)
-    const result = await bleManager.connect(null, (success, device, error) => {
-      if (success) {
-        console.log('Connected via callback:', device.name);
-        // Do additional setup here if needed
-      } else {
-        console.error('Connection failed via callback:', error);
-      }
-    });
-    
-    // Option 2: Show ALL devices for debugging (uncomment to use)
-    /*
-    const result = await bleManager.connect({
-      acceptAllDevices: true,
-      optionalServices: [SERVICE_UUID, 'generic_access', 'device_information']
-    });
-    */
-    
-  } catch (error) {
-    outputDiv.textContent += `Error: ${error.message}\n`;
-    console.error('BLE Error:', error);
-  }
-});
-
-// Function to send BLE command (can be called from blocks or code)
-async function sendBLECommand(hexCommand) {
-  try {
-    const result = await bleManager.write(hexCommand);
-    outputDiv.textContent += `📤 Sent: ${result.sent}\n`;
-    return result;
-  } catch (error) {
-    outputDiv.textContent += `Send error: ${error.message}\n`;
-    throw error;
-  }
-}
 
 
 
@@ -97,19 +45,6 @@ Blockly.JavaScript.forBlock['api_call'] = function(block, generator) {
   
   var code = variable + ' = await fetch(' + url + ').then(r => r.text());\n';
   return code;
-};
-
-// Define custom BLE send block
-Blockly.Blocks['ble_send'] = {
-  init: function() {
-    this.appendValueInput("DATA")
-        .setCheck("String")
-        .appendField("send BLE command");
-    this.setPreviousStatement(true, null);
-    this.setNextStatement(true, null);
-    this.setColour(210);
-    this.setTooltip("Send a hex command to the connected BLE device");
-  }
 };
 
 
@@ -154,13 +89,6 @@ Blockly.JavaScript.forBlock['serial_wait_for_response'] = function(block, genera
   var statements = generator.statementToCode(block, 'DO');
   
   var code = `await waitForSerialResponse(${timeout}, () => {\n${statements}});\n`;
-  return code;
-};
-
-// JavaScript code generator for BLE send block
-Blockly.JavaScript.forBlock['ble_send'] = function(block, generator) {
-  var data = generator.valueToCode(block, 'DATA', Blockly.JavaScript.ORDER_ATOMIC) || '""';
-  var code = 'await sendBLECommand(' + data + ');\n';
   return code;
 };
 
