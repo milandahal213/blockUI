@@ -205,3 +205,37 @@ body {
 #serialButton:active {
   transform: scale(0.95);
 }
+
+#channelStatus {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #32b51b;
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+#channelStatus:hover {
+  background-color: #067c33;
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
+  transform: scale(1.05);
+}
+
+#channelStatus:active {
+  transform: scale(0.95);
+  background-color: #038a39;
+}
+
+#channelStatusBox{
+  background-color:rgba(224, 13, 13, 0.49);
+  border-color: #1406066e;
+  color: #616161;
+  padding: 6px 12px;
+}
+

@@ -26,6 +26,13 @@ class ChannelManager {
       ws.onopen = () => {
         console.log(`✅ Connected to channel: ${this.channelName}`);
         this.isConnected = true;
+
+
+        // Update when connected
+        document.getElementById('channelStatusText').textContent = 'Connected';
+        document.getElementById('channelStatusBox').style.backgroundColor = 'rgba(0, 128, 0, 0.2)';
+        document.getElementById('channelStatusBox').style.borderColor = '#4CAF50';
+        document.getElementById('channelStatusBox').style.color = '#2E7D32';
         
         if (window.outputDiv) {
           window.outputDiv.textContent += `✅ Connected to channel: ${this.channelName}\n`;
@@ -63,11 +70,13 @@ class ChannelManager {
             
             if (window.outputDiv) {
               window.outputDiv.textContent += `📥 Channel received: ${JSON.stringify(data.value)}\n`;
+              
             }
             
             // Call callback if set
             if (this.onMessageReceived) {
               this.onMessageReceived(data.value);
+              document.getElementById('channelMessages').textContent = data.value;
             }
           }
         } catch (e) {
@@ -86,6 +95,12 @@ class ChannelManager {
       ws.onclose = (event) => {
         console.log(`⚠️ Disconnected from channel`, event.code, event.reason);
         this.isConnected = false;
+
+        document.getElementById('channelStatusText').textContent = 'Disconnected';
+        document.getElementById('channelStatusBox').style.backgroundColor = 'rgba(224, 13, 13, 0.49)';
+        document.getElementById('channelStatusBox').style.borderColor = '#1406066e';
+        document.getElementById('channelStatusBox').style.color = '#616161';
+
         this.connection = null;
         if (window.outputDiv) {
           window.outputDiv.textContent += `⚠️ Disconnected from channel (code: ${event.code})\n`;
